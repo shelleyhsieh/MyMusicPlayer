@@ -20,9 +20,9 @@ class MusicViewController: UIViewController {
     
     var timer = Timer()
     
-    var totalTimeInSec: Double!
-    var remainingTimeInSec: Double!
-    var currentTimeInSec:Double!
+    var totalTimeInSec: Double = 0.0
+    var remainingTimeInSec: Double = 0.0
+    var currentTimeInSec:Double = 0.0
     
     
     @IBOutlet weak var albumImageView: UIImageView!
@@ -42,18 +42,28 @@ class MusicViewController: UIViewController {
         
         // 下載音樂
         SongController.shared.fetchItems { items in
-            self.items = items!
+            guard let items = items else {
+                print("❌下載失敗")
+                return
+            }
+            self.items = items
             self.playMusic()
+        } errorHandler: { error in
+            self.displayError(error, title: "❌ 檔案抓取失敗")
+            print("😡\(error)")
         }
+        
         
         //  播放循環音樂，當通知發生時，執行AVPlayerItemDidPlayToEndTime
         NotificationCenter.default.addObserver(forName: NSNotification.Name.AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] (notification) in
-            if self!.songIndex == (self!.items.count) - 1 {
-                self!.songIndex = 0
+            guard let self = self else { return }
+            
+            if self.songIndex == (self.items.count) - 1 {
+                self.songIndex = 0
             } else {
-                self!.songIndex += 1
+                self.songIndex += 1
             }
-            self!.playMusic()
+            self.playMusic()
         }
         
     }
@@ -61,6 +71,15 @@ class MusicViewController: UIViewController {
     // 關掉畫面時，歌曲停止播放，否則歌曲會一直無限播下去還會疊加
     override func viewDidDisappear(_ animated: Bool) {
         removePeriodicTimeObserver()
+    }
+    //MARK: - 畫面功能
+    // 檔案抓取失敗跳出警告視窗
+    func displayError(_ error: ItemError, title: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: error.message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Dismiss", style: .default, handler: nil))
+            self.present(alert, animated: true, completion: nil)
+        }
     }
     
     // 更新歌曲歌手資訊
@@ -103,14 +122,14 @@ class MusicViewController: UIViewController {
             removePeriodicTimeObserver()
         } else {
             remainingTimeInSec = totalTimeInSec - currentTimeInSec
-            totalTimeLable.text = timeFormate(currentTimeInSec)
-            remaingTimeLable.text = "-\(timeFormate(remainingTimeInSec))"
+            totalTimeLable.text = getTimeFormate(currentTimeInSec)
+            remaingTimeLable.text = "-\(getTimeFormate(remainingTimeInSec))"
             timeSlider.value = Float(currentTimeInSec / totalTimeInSec)
         }
     }
     
     // 音樂時間轉換 "分鐘：秒數"
-    func timeFormate(_ timeInSec: Double) -> String {
+    func getTimeFormate(_ timeInSec: Double) -> String {
         let minute = Int(timeInSec) / 60
         let second = Int(timeInSec) % 60
         
@@ -131,6 +150,8 @@ class MusicViewController: UIViewController {
             self.updateInfo()
         }
         // 更新圖片（讓畫質更好）
+        // 使用indices判斷array裡是否有index,減少crash
+        guard items.indices.contains(songIndex) else { return }
         SongController.shared.fetchImage(urlString: items[songIndex].artworkUrl100) { image in
             DispatchQueue.main.async {
                 self.albumImageView.image = image
@@ -140,6 +161,7 @@ class MusicViewController: UIViewController {
         // time observer
         addPeriodicTimeObserver()
     }
+    
     // 播放 ＆ 暫停
     func playAndPause(){
         if player.timeControlStatus == .playing {
@@ -151,11 +173,11 @@ class MusicViewController: UIViewController {
         }
     }
 
+    // MARK: - IBAction, 畫面按鈕控制
     @IBAction func playBtnPressed(_ sender: UIButton) {
         playAndPause()
-        
-    }
     
+    }
     
     @IBAction func nextSong(_ sender: UIButton) {
         if songIndex == items.count - 1 {
@@ -166,7 +188,6 @@ class MusicViewController: UIViewController {
         playMusic()
     }
     
-    
     @IBAction func prevSong(_ sender: UIButton) {
         if songIndex == 0 {
             songIndex = items.count - 1
@@ -174,7 +195,6 @@ class MusicViewController: UIViewController {
             songIndex -= 1
         }
     }
-    
     
     @IBAction func sliderControled(_ sender: UISlider) {
         //slider移動並計算秒數
@@ -184,7 +204,5 @@ class MusicViewController: UIViewController {
         player.seek(to: time)
         // seek :找尋音樂區段
     }
-    
-    
     
 }

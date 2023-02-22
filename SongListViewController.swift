@@ -21,16 +21,33 @@ class SonglistViewController: UIViewController, UITableViewDelegate, UITableView
     // MARK: - View
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        SongController.shared.fetchItems { items in
-            self.items = items!
+        
+        SongController.shared.fetchItems { (items) in
+            guard let items = items else {
+                print("❌抓取失敗")
+                return
+            }
+            self.items = items
+            // UI 一定要回main thread
             DispatchQueue.main.async {
                 self.tableView.reloadData()
             }
+            print("✅成功抓取音樂清單")
+        } errorHandler: { (error) in
+            self.displayError(error, title: "❌ 檔案抓取失敗")
+            print("😡\(error)")
         }
-        
     }
     
+    // 檔案抓取失敗跳出警告視窗
+    func displayError(_ error: ItemError, title: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: title, message: error.message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Dismiss", style: .default, handler: nil))
+            self.present(alert, animated: true, completion: nil)
+        }
+    }
+
     //MARK: - Actions
     @IBSegueAction func playMusic(_ coder: NSCoder) -> MusicViewController? {
        let controller = MusicViewController(coder: coder)
@@ -58,16 +75,18 @@ class SonglistViewController: UIViewController, UITableViewDelegate, UITableView
     
         cell.artistNameLable.text = items[indexPath.row].artistName
         cell.trackNameLable.text = items[indexPath.row].trackName
-        cell.albumImageView.image = UIImage(systemName: "Photo")
+        cell.albumImageView.image = UIImage(systemName: "Photo") //若尚未下載完畢先出現內建的SFsymbol
         
         let item = items[indexPath.row]
-        URLSession.shared.dataTask(with: item.artworkUrl60) { data, response, error in
-            if let data = data {
-                DispatchQueue.main.async {
-                    cell.albumImageView.image = UIImage(data: data)
-                }
+        let imageUrl = item.artworkUrl100
+        
+        // 改用SongController.shared的方式來呼叫抓照片的功能
+        SongController.shared.fetchImage(urlString: imageUrl ) { (image) in
+            guard let image = image else { return }
+            DispatchQueue.main.async {
+                cell.albumImageView.image = image
             }
-        }.resume()
+        }
         
         // 設定cell高度
         tableView.rowHeight = 95
